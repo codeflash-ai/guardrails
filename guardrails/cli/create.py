@@ -113,18 +113,23 @@ def generate_template_config(
         script_dir, "hub", "template_config.py.template"
     )
 
-    with open(config_template_path, "r") as file:
-        template_content = file.read()
-    guard_instantiations = []
+    # Read template file content efficiently
+    with open(config_template_path, "rb") as file:
+        template_content = file.read().decode("utf-8")
 
-    for i, guard in enumerate(template["guards"]):
-        guard_instantiations.append(f"guard{i} = Guard.from_dict(guards[{i}])")
-    guard_instantiations = "\n".join(guard_instantiations)
-    # Interpolate variables
+    guards = template["guards"]
+    # Precompute guard instantiations using list comprehension and str.join
+    guard_instantiations = "\n".join(
+        f"guard{i} = Guard.from_dict(guards[{i}])" for i in range(len(guards))
+    )
+    # Prepare VALIDATOR_IMPORTS string efficiently
+    validator_imports = ", ".join(installed_validators)
+
+    # Interpolate variables (keep original logic)
     output_content = template_content.format(
         TEMPLATE_FILE_NAME=template_file_name,
-        GUARDS=json.dumps(template["guards"], indent=4),
-        VALIDATOR_IMPORTS=", ".join(installed_validators),
+        GUARDS=json.dumps(guards, indent=4),
+        VALIDATOR_IMPORTS=validator_imports,
         GUARD_INSTANTIATIONS=guard_instantiations,
     )
 
