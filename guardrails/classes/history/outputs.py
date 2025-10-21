@@ -82,15 +82,18 @@ class Outputs(IOutputs, ArbitraryModel):
     )
 
     def _all_empty(self) -> bool:
-        return (
-            self.llm_response_info is None
-            and self.parsed_output is None
-            and self.validation_response is None
-            and self.guarded_output is None
-            and len(self.reasks) == 0
-            and len(self.validator_logs) == 0
-            and self.error is None
-        )
+        # Fast-path: if any likely-to-be-populated field is set, return False immediately
+        if (
+            self.llm_response_info is not None
+            or self.parsed_output is not None
+            or self.validation_response is not None
+            or self.guarded_output is not None
+            or self.error is not None
+        ):
+            return False
+
+        # Use not self.reasks and not self.validator_logs for short-circuiting
+        return not self.reasks and not self.validator_logs
 
     @property
     def failed_validations(self) -> List[ValidatorLogs]:
