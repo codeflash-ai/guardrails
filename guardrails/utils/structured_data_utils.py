@@ -20,35 +20,43 @@ def schema_to_tool(schema) -> dict:
 
 
 def set_additional_properties_false_iteratively(schema):
+    # To minimize repeated type checks and dict lookups,
+    # compress logic and use local variables.
     stack = [schema]
     while stack:
         current = stack.pop()
         if isinstance(current, dict):
-            if "properties" in current:
-                current["required"] = list(
-                    current["properties"].keys()
-                )  # this has to be set
-            if "maximum" in current:
+            keys = current.keys()
+            # Use a local ref for quick lookup
+            if "properties" in keys:
+                current["required"] = list(current["properties"].keys())
+            # Gather which props to drop in one go for small dicts
+            # Avoid multiple separate passes for the same keys.
+            drop_props = []
+            if "maximum" in keys:
                 logger.warn("Property maximum is not supported. Dropping")
-                current.pop("maximum")  # the api does not like these set
-            if "minimum" in current:
+                drop_props.append("maximum")
+            if "minimum" in keys:
                 logger.warn("Property maximum is not supported. Dropping")
-                current.pop("minimum")  # the api does not like these set
-            if "default" in current:
+                drop_props.append("minimum")
+            if "default" in keys:
                 logger.warn("Property default is not supported. Marking field Required")
-                current.pop("default")  # the api does not like these set
-            for prop in current.values():
-                stack.append(prop)
+                drop_props.append("default")
+            for prop in drop_props:
+                current.pop(prop)
+            # Avoid recomputing .values() inside the loop; use list() to prevent mutation during iteration.
+            values = list(current.values())
+            stack.extend(values)
+            # The following conditional does not need deeper nesting.
+            if (
+                "additionalProperties" not in keys
+                and "type" in keys
+                and current["type"] == "object"
+            ):
+                current["additionalProperties"] = False  # the api needs these set
         elif isinstance(current, list):
-            for prop in current:
-                stack.append(prop)
-        if (
-            isinstance(current, dict)
-            and "additionalProperties" not in current
-            and "type" in current
-            and current["type"] == "object"
-        ):
-            current["additionalProperties"] = False  # the api needs these set
+            # Use extend instead of repeated append for better perf.
+            stack.extend(current)
 
 
 def json_function_calling_tool(
