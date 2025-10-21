@@ -1,4 +1,3 @@
-import copy
 from string import Template
 from typing import Dict, cast, Optional, Tuple
 
@@ -16,7 +15,7 @@ from guardrails.prompt.instructions import Instructions
 def messages_source(messages: MessageHistory) -> MessageHistory:
     messages_copy = []
     for msg in messages:
-        msg_copy = copy.deepcopy(msg)
+        msg_copy = dict(msg)
         content = (
             msg["content"].source
             if isinstance(msg["content"], Prompt)
