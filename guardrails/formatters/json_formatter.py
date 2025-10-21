@@ -14,15 +14,20 @@ def _deref_schema_path(schema: dict, path: Union[list, str]):
     and pulls the respective sub-object."""
     if isinstance(path, str):
         path = path.split("/")
-    if path[0] == "#":
-        # The '#' indicates the root of the chain, so this is a first call.
-        # If we're at the root we want to make sure we have our '$defs'.
-        assert "$defs" in schema
-        return _deref_schema_path(schema, path[1:])
-    if len(path) == 1:
-        return schema[path[0]]
-    else:
-        return _deref_schema_path(schema[path[0]], path[1:])
+    idx = 0
+    plen = len(path)
+    # Unroll the recursion into a loop for performance
+    while idx < plen:
+        key = path[idx]
+        if key == "#":
+            # The '#' indicates the root of the chain, so this is a first call.
+            # If we're at the root we want to make sure we have our '$defs'.
+            assert "$defs" in schema
+            idx += 1
+            continue
+        schema = schema[key]
+        idx += 1
+    return schema
 
 
 def _jsonschema_to_jsonformer(
@@ -52,23 +57,27 @@ def _jsonschema_to_jsonformer(
         # We may also need to handle sub-schema defs.
         # For now, build a quick tree in the defs.
         current = objdefs["$defs"]
+        # Use for loop with early binding for step for efficiency
         for step in path:
-            if step not in current:
-                current[step] = dict()
-            current = current[step]
+            current = current.setdefault(step, {})
         current.update(schema["$defs"])
 
-    result = dict()
-    for k, v in schema.items():
-        # Convert {"type": "integer"} to {"type": "number"} float is already 'number'.
+    result = {}
+    # Avoid .items() when possible - but we need keys and values here.
+    # Prebind locals for small performance benefit
+    schema_items = schema.items()
+    result_type = None
+    for k, v in schema_items:
         if k == "type" and v == "integer":
             result["type"] = "number"
         elif k == "type" and v == "object":
             result["type"] = "object"
-            result["properties"] = dict()
-            for subkey, subvalue in schema["properties"].items():  # Must be present.
+            # Use local reference to properties dict
+            props = schema["properties"]
+            result_props = result["properties"] = {}
+            for subkey, subvalue in props.items():  # Must be present.
                 path.append(subkey)
-                result["properties"][subkey] = _jsonschema_to_jsonformer(
+                result_props[subkey] = _jsonschema_to_jsonformer(
                     subvalue,
                     path,
                     objdefs,
@@ -81,6 +90,8 @@ def _jsonschema_to_jsonformer(
             result = _jsonschema_to_jsonformer(
                 _deref_schema_path(objdefs, v), path, objdefs
             )
+            # Short-circuit after reference resolution
+            break
         else:
             result[k] = v
     return result
