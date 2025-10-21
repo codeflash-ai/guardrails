@@ -255,14 +255,42 @@ def prune_extra_keys(
 
 
 def coerce(value: Any, desired_type: Callable) -> Any:
+    # Fast type check before coercion, avoids exception cost
+    if isinstance(value, desired_type):
+        return value
     try:
-        coerced_value = desired_type(value)
-        return coerced_value
+        return desired_type(value)
     except (ValueError, TypeError):
         return value
 
 
 def try_json_parse(value: str) -> Any:
+    # Early returns for the most common types (empty string, not a JSON container)
+    # Avoid calling json.loads unless value looks like a JSON container
+    value = value.strip()
+    if not value:
+        return value
+    # Only parse if it may be a JSON object/array/null/bool/number/string (minimal check)
+    if value[0] not in (
+        "{",
+        "[",
+        '"',
+        "-",
+        "n",
+        "t",
+        "f",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+    ):
+        return value
     try:
         return json.loads(value)
     except Exception:
@@ -272,37 +300,41 @@ def try_json_parse(value: str) -> Any:
 def coerce_to_type(
     payload: Union[str, List[Any], Dict[str, Any], Any], schema_type: SimpleTypes
 ) -> Any:
+    # All type checks are ordered in the same way, but moved 'isinstance' checks before branch logic
     if schema_type == SimpleTypes.ARRAY:
+        if isinstance(payload, list):
+            return payload
         if isinstance(payload, str):
             payload = try_json_parse(payload)
-        if not isinstance(payload, list):
-            return coerce(payload, list)
-        return payload
+            if isinstance(payload, list):
+                return payload
+        return coerce(payload, list)
     elif schema_type == SimpleTypes.BOOLEAN:
-        if not isinstance(payload, bool):
-            return coerce(payload, bool)
-        return payload
+        if isinstance(payload, bool):
+            return payload
+        return coerce(payload, bool)
     elif schema_type == SimpleTypes.INTEGER:
-        if not isinstance(payload, int):
-            val = coerce(payload, int)
-            return val
-        return payload
+        if isinstance(payload, int):
+            return payload
+        return coerce(payload, int)
     elif schema_type == SimpleTypes.NULL:
         return None
     elif schema_type == SimpleTypes.NUMBER:
-        if not isinstance(payload, float):
-            return coerce(payload, float)
-        return payload
+        if isinstance(payload, float):
+            return payload
+        return coerce(payload, float)
     elif schema_type == SimpleTypes.OBJECT:
+        if isinstance(payload, dict):
+            return payload
         if isinstance(payload, str):
             payload = try_json_parse(payload)
-        if not isinstance(payload, dict):
-            return coerce(payload, dict)
-        return payload
+            if isinstance(payload, dict):
+                return payload
+        return coerce(payload, dict)
     elif schema_type == SimpleTypes.STRING:
-        if not isinstance(payload, str) and not isinstance(payload, (list, dict)):
-            return coerce(payload, str)
-        return payload
+        if isinstance(payload, str) or isinstance(payload, (list, dict)):
+            return payload
+        return coerce(payload, str)
 
 
 def coerce_property(
