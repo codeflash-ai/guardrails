@@ -32,9 +32,11 @@ def get_value_from_path(
 
 
 def fill_list(desired_length: int, array: list):
-    while len(array) < (desired_length + 1):
-        array.append(None)
-
+    # Only append if the array is shorter than desired_length + 1
+    current_len = len(array)
+    target_len = desired_length + 1
+    if current_len < target_len:
+        array.extend([None] * (target_len - current_len))
     return array
 
 
