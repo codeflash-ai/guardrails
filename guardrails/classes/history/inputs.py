@@ -97,15 +97,34 @@ class Inputs(IInputs, ArbitraryModel):
 
     @classmethod
     def from_interface(cls, i_inputs: IInputs) -> "Inputs":
+        # Optimize check for messages, avoid hasattr and direct check in one step
+        messages = getattr(i_inputs, "messages", None)  # type: ignore
         deserialized_messages = None
-        if hasattr(i_inputs, "messages") and i_inputs.messages:  # type: ignore
-            deserialized_messages = []
-            for msg in i_inputs.messages:  # type: ignore
-                ser_msg = {**msg}
-                content = ser_msg.get("content")
-                if content:
-                    ser_msg["content"] = Prompt(content)
-                deserialized_messages.append(ser_msg)
+        if messages:
+            # Preallocate the result list for improved memory efficiency if len is available
+            try:
+                length = len(messages)
+                deserialized_messages = [None] * length
+                idx = 0
+                for msg in messages:  # type: ignore
+                    ser_msg = (
+                        msg.copy()
+                    )  # more efficient than {**msg} for dicts (when no __missing__)
+                    content = ser_msg.get("content")
+                    if content:
+                        # Avoid reconstructing Prompt unless necessary
+                        ser_msg["content"] = Prompt(content)
+                    deserialized_messages[idx] = ser_msg
+                    idx += 1
+            except TypeError:
+                # Fallback for non-sized iterables
+                deserialized_messages = []
+                for msg in messages:  # type: ignore
+                    ser_msg = msg.copy()
+                    content = ser_msg.get("content")
+                    if content:
+                        ser_msg["content"] = Prompt(content)
+                    deserialized_messages.append(ser_msg)
 
         num_reasks = (
             int(i_inputs.num_reasks) if i_inputs.num_reasks is not None else None
@@ -123,5 +142,8 @@ class Inputs(IInputs, ArbitraryModel):
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> "Inputs":
-        i_inputs = IInputs.from_dict(obj) or IInputs()
+        # Minor: inline the or IInputs to avoid unnecessary from_dict if it's falsy
+        i_inputs = IInputs.from_dict(obj)
+        if not i_inputs:
+            i_inputs = IInputs()
         return cls.from_interface(i_inputs)
