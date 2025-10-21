@@ -33,18 +33,14 @@ def preprocess_prompt_for_string_output(
     instructions: Optional[Instructions],
     prompt: Prompt,
 ) -> Tuple[Optional[Instructions], Prompt]:
-    if isinstance(prompt_callable, LiteLLMCallable) or isinstance(
-        prompt_callable, AsyncLiteLLMCallable
-    ):
+    is_lite = isinstance(prompt_callable, (LiteLLMCallable, AsyncLiteLLMCallable))
+    if is_lite:
         prompt.source += "\n\nString Output:\n\n"
-    if (
-        isinstance(prompt_callable, LiteLLMCallable)
-        or isinstance(prompt_callable, AsyncLiteLLMCallable)
-    ) and not instructions:
-        instructions = Instructions(
-            "You are a helpful assistant, expressing yourself through a string."
-        )
-
+        if not instructions:
+            # Only instantiate Instructions if needed
+            instructions = Instructions(
+                "You are a helpful assistant, expressing yourself through a string."
+            )
     return instructions, prompt
 
 
