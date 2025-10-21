@@ -32,9 +32,10 @@ def get_value_from_path(
 
 
 def fill_list(desired_length: int, array: list):
-    while len(array) < (desired_length + 1):
-        array.append(None)
-
+    # Extend the list efficiently
+    missing = (desired_length + 1) - len(array)
+    if missing > 0:
+        array.extend([None] * missing)
     return array
 
 
@@ -44,25 +45,27 @@ def write_value_to_path(
     property_path: str,
     value: Any,
 ) -> Any:
-    if property_path == "$" or not len(property_path) or isinstance(write_object, str):
+    if property_path == "$" or not property_path or isinstance(write_object, str):
         return value
 
     path_elems = property_path.split(".")
-    if path_elems[0] == "$":
+    if path_elems and path_elems[0] == "$":
         path_elems.pop(0)
 
     this_key = path_elems.pop(0)
-    next_key: str = safe_get(path_elems, 0, "")
-
+    next_key: str = path_elems[0] if path_elems else ""
     remaining_path = ".".join(path_elems)
-
     next_key_is_index = next_key.isnumeric()
     key = int(this_key) if isinstance(write_object, list) else this_key
     default_value = [] if next_key_is_index else {}
     value_for_key = safe_get(write_object, key, default_value)
 
-    if isinstance(write_object, list) and int(key) >= len(write_object):
-        write_object = fill_list(int(key), write_object)
+    if (
+        isinstance(write_object, list)
+        and isinstance(key, int)
+        and key >= len(write_object)
+    ):
+        write_object = fill_list(key, write_object)
 
     write_object[key] = write_value_to_path(value_for_key, remaining_path, value)  # type: ignore
 
