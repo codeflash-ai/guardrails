@@ -93,7 +93,7 @@ def trace_llm_call(
     if ser_function_call:
         current_span.set_attribute("llm.function_call", ser_function_call)
 
-    if input_messages and isinstance(input_messages, list):
+    if input_messages:
         for i, message in enumerate(input_messages):
             msg_obj = to_dict(message)
             for key, value in msg_obj.items():
@@ -101,19 +101,17 @@ def trace_llm_call(
                     standardized_key = f"message.{key}" if "message" not in key else key
                     current_span.set_attribute(
                         f"llm.input_messages.{i}.{standardized_key}",
-                        serialize(value),  # type: ignore
+                        serialize(value),
                     )
 
     ser_invocation_parameters = serialize(invocation_parameters)
     redacted_ser_invocation_parameters = recursive_key_operation(
         ser_invocation_parameters, redact
     )
-    reser_invocation_parameters = (
-        json.dumps(redacted_ser_invocation_parameters)
-        if isinstance(redacted_ser_invocation_parameters, dict)
-        or isinstance(redacted_ser_invocation_parameters, list)
-        else redacted_ser_invocation_parameters
-    )
+    if isinstance(redacted_ser_invocation_parameters, (dict, list)):
+        reser_invocation_parameters = json.dumps(redacted_ser_invocation_parameters)
+    else:
+        reser_invocation_parameters = redacted_ser_invocation_parameters
     if reser_invocation_parameters:
         current_span.set_attribute(
             "llm.invocation_parameters", reser_invocation_parameters
@@ -123,16 +121,15 @@ def trace_llm_call(
     if ser_model_name:
         current_span.set_attribute("llm.model_name", ser_model_name)
 
-    if output_messages and isinstance(output_messages, list):
+    if output_messages:
         for i, message in enumerate(output_messages):
-            # Most responses are either dictionaries or Pydantic models
             msg_obj = to_dict(message)
             for key, value in msg_obj.items():
                 if value is not None:
                     standardized_key = f"message.{key}" if "message" not in key else key
                     current_span.set_attribute(
                         f"llm.output_messages.{i}.{standardized_key}",
-                        serialize(value),  # type: ignore
+                        serialize(value),
                     )
 
     ser_prompt_template_template = serialize(prompt_template_template)
