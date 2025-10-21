@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional, Set, Union, cast
 
 from guardrails.utils.safe_get import safe_get
 
+_schema_cache = {}
+
 
 ### Reading and Writing Payloads by JSON Path ###
 def get_value_from_path(
@@ -143,5 +145,18 @@ def get_all_paths(
 ) -> Set[str]:
     """Takes a JSON Schema and returns all possible JSONPaths within that
     schema."""
-    dereferenced_schema = cast(Dict[str, Any], jsonref.replace_refs(json_schema))
+    schema_id = _get_schema_id(json_schema)
+    if schema_id not in _schema_cache:
+        _schema_cache[schema_id] = cast(
+            Dict[str, Any], jsonref.replace_refs(json_schema)
+        )
+    dereferenced_schema = _schema_cache[schema_id]
     return _get_all_paths(dereferenced_schema, paths=paths, json_path=json_path)
+
+
+def _get_schema_id(schema: Dict[str, Any]) -> str:
+    if "$id" in schema:
+        return str(schema["$id"])
+    elif "id" in schema:
+        return str(schema["id"])
+    return str(id(schema))
