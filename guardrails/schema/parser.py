@@ -76,61 +76,67 @@ def _get_all_paths(
     paths: Optional[Set[str]] = None,
     json_path: str = "$",
 ) -> Set[str]:
-    if not paths:
+    if paths is None:
         paths = set()
     # Append the parent path for this iteration
     paths.add(json_path)
 
+    schema_type = json_schema.get("type")
+    get = json_schema.get
+
     # Object Schema
-    schema_properties: Dict[str, Any] = json_schema.get("properties", {})
-    for k, v in schema_properties.items():
-        child_path = f"{json_path}.{k}"
-        _get_all_paths(v, paths=paths, json_path=child_path)
+    schema_properties: Dict[str, Any] = get("properties", {})
+    if schema_properties:
+        # Avoid repeated lookups and attribute accesses by using items() directly
+        for k, v in schema_properties.items():
+            child_path = f"{json_path}.{k}"
+            _get_all_paths(v, paths=paths, json_path=child_path)
 
     ## Object Schema allows anonymous properties
-    additional_properties: Dict[str, Any] = json_schema.get(
-        "additionalProperties", False
-    )
-    schema_type = json_schema.get("type")
+    additional_properties: Dict[str, Any] = get("additionalProperties", False)
     # NOTE: Technically we should check for schema compositions
     #   that would yield an object as well,
     #   but the case below is a known fault of Pydantic.
     if additional_properties or (
-        not json_schema.get("properties") and schema_type == SimpleTypes.OBJECT
+        not schema_properties and schema_type == SimpleTypes.OBJECT
     ):
         wildcard_path = f"{json_path}.*"
         paths.add(wildcard_path)
 
     # Array Schema
-    schema_items = json_schema.get("items", {})
+    schema_items = get("items")
     if schema_items:
         _get_all_paths(schema_items, paths=paths, json_path=json_path)
 
     # Conditional SubSchema
-    if_block: Dict[str, Any] = json_schema.get("if", {})
+    if_block = get("if")
     if if_block:
         _get_all_paths(if_block, paths=paths, json_path=json_path)
 
-    then_block: Dict[str, Any] = json_schema.get("then", {})
+    then_block = get("then")
     if then_block:
         _get_all_paths(then_block, paths=paths, json_path=json_path)
 
-    else_block: Dict[str, Any] = json_schema.get("else", {})
+    else_block = get("else")
     if else_block:
         _get_all_paths(else_block, paths=paths, json_path=json_path)
 
     # Schema Composition
-    oneOf: List[Dict[str, Any]] = json_schema.get("oneOf", [])
-    for sub_schema in oneOf:
-        _get_all_paths(sub_schema, paths=paths, json_path=json_path)
+    # Avoid unnecessary repeated function calls by storing results in local variables
+    oneOf = get("oneOf")
+    if oneOf:
+        for sub_schema in oneOf:
+            _get_all_paths(sub_schema, paths=paths, json_path=json_path)
 
-    anyOf: List[Dict[str, Any]] = json_schema.get("anyOf", [])
-    for sub_schema in anyOf:
-        _get_all_paths(sub_schema, paths=paths, json_path=json_path)
+    anyOf = get("anyOf")
+    if anyOf:
+        for sub_schema in anyOf:
+            _get_all_paths(sub_schema, paths=paths, json_path=json_path)
 
-    allOf: List[Dict[str, Any]] = json_schema.get("allOf", [])
-    for sub_schema in allOf:
-        _get_all_paths(sub_schema, paths=paths, json_path=json_path)
+    allOf = get("allOf")
+    if allOf:
+        for sub_schema in allOf:
+            _get_all_paths(sub_schema, paths=paths, json_path=json_path)
 
     return paths
 
