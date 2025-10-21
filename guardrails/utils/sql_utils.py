@@ -119,6 +119,7 @@ class SqlAlchemyDriver(SQLDriver):
 def create_sql_driver(
     schema_file: Optional[str] = None, conn: Optional[str] = None
 ) -> SQLDriver:
-    if schema_file is None and conn is None:
-        return SimpleSqlDriver()
-    return SqlAlchemyDriver(schema_file=schema_file, conn=conn)
+    # Avoid unnecessary branching and directly choose the driver
+    if schema_file is not None or conn is not None:
+        return SqlAlchemyDriver(schema_file=schema_file, conn=conn)
+    return SimpleSqlDriver()
