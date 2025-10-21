@@ -1,7 +1,7 @@
 import json
 from typing import Any, Callable, Dict, Optional, Union, List
 from opentelemetry.baggage import get_baggage
-from opentelemetry import context
+from opentelemetry import trace, context
 from opentelemetry.context import Context
 from opentelemetry.trace import Tracer, Span
 
@@ -10,6 +10,8 @@ from guardrails.stores.context import (
     get_tracer as get_context_tracer,
     get_tracer_context,
 )
+
+trace = None
 
 
 def get_tracer(tracer: Optional[Tracer] = None) -> Optional[Tracer]:
@@ -32,8 +34,8 @@ def get_span(span: Optional[Span] = None) -> Optional[Span]:
     if span is not None and hasattr(span, "add_event"):
         return span
     try:
-        from opentelemetry import trace
-
+        if trace is None:
+            return None
         current_context = get_current_context()
         current_span = trace.get_current_span(current_context)
         return current_span
@@ -46,12 +48,22 @@ def serialize(val: Any) -> Optional[str]:
     try:
         if val is None:
             return None
-        if hasattr(val, "to_dict"):
-            return json.dumps(val.to_dict())
-        elif hasattr(val, "__dict__"):
-            return json.dumps(val.__dict__)
-        elif isinstance(val, dict) or isinstance(val, list):
+
+        # Fast path for dict/list, avoid hasattr unless necessary
+        if isinstance(val, (dict, list)):
             return json.dumps(val)
+
+        # Check for to_dict method only once and call if available
+        to_dict = getattr(val, "to_dict", None)
+        if callable(to_dict):
+            return json.dumps(to_dict())
+
+        # Check for __dict__ only once (not all objects have it)
+        val_dict = getattr(val, "__dict__", None)
+        # Must be a real dict, not just present
+        if isinstance(val_dict, dict):
+            return json.dumps(val_dict)
+
         return str(val)
     except Exception:
         return None
