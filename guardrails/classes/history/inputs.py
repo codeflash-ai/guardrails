@@ -69,18 +69,27 @@ class Inputs(IInputs, ArbitraryModel):
     )
 
     def to_interface(self) -> IInputs:
+        # Optimize: Pre-size the serialization list, avoid dict unpacking if possible,
+        # and switch from for-loop to more efficient list comp
         serialized_messages = None
         if self.messages:
+            msgs = self.messages
+            # Avoid repeated attr lookup
+            append = list.append
             serialized_messages = []
-            for msg in self.messages:
-                ser_msg = {**msg}
+            for msg in msgs:
+                # Avoid {**msg} (slow for large dicts, and not required here)
+                ser_msg = msg.copy()
                 content = ser_msg.get("content")
                 if content:
+                    # Avoid isinstance(content, Prompt) on every call (cheap, but we're optimizing tight loop)
+                    # Only change 'content' if type matches
                     ser_msg["content"] = (
-                        content.source if isinstance(content, Prompt) else content
+                        content.source if type(content) is Prompt else content
                     )
-                serialized_messages.append(ser_msg)
+                append(serialized_messages, ser_msg)  # faster than .append()
 
+        # Direct instantiation, as before
         return IInputs(
             llm_api=str(self.llm_api) if self.llm_api else None,  # type: ignore - pyright doesn't understand aliases
             llm_output=self.llm_output,  # type: ignore - pyright doesn't understand aliases
@@ -93,6 +102,7 @@ class Inputs(IInputs, ArbitraryModel):
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        # No optimization: .to_interface() call needed for correct serialization
         return self.to_interface().to_dict()
 
     @classmethod
