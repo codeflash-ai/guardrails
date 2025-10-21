@@ -1,5 +1,4 @@
 import copy
-from string import Template
 from typing import Dict, cast, Optional, Tuple
 
 from guardrails.classes.output_type import OutputTypes
@@ -11,6 +10,7 @@ from guardrails.llm_providers import (
 from guardrails.prompt.prompt import Prompt
 from guardrails.types.inputs import MessageHistory
 from guardrails.prompt.instructions import Instructions
+from string import Template
 
 
 def messages_source(messages: MessageHistory) -> MessageHistory:
@@ -81,10 +81,28 @@ def preprocess_prompt(
     output_type: OutputTypes,
     use_xml: bool,
 ) -> Tuple[Optional[Instructions], Prompt]:
+    # Optimize: Remove unnecessary function dispatch
     if output_type == OutputTypes.STRING:
-        return preprocess_prompt_for_string_output(
-            prompt_callable, instructions, prompt
-        )
-    return preprocess_prompt_for_json_output(
-        prompt_callable, instructions, prompt, use_xml
-    )
+        is_lite_llm = _is_lite_llm(prompt_callable)
+        if is_lite_llm:
+            prompt.source += "\n\nString Output:\n\n"
+            if not instructions:
+                instructions = Instructions(
+                    "You are a helpful assistant, expressing yourself through a string."
+                )
+        return instructions, prompt
+    else:
+        is_lite_llm = _is_lite_llm(prompt_callable)
+        if is_lite_llm:
+            prompt.source += "\n\nJson Output:\n\n"
+            if not instructions:
+                schema_type = "XML schemas" if use_xml else "JSON schema"
+                instructions = Instructions(
+                    f"You are a helpful assistant, able to express yourself purely through JSON, strictly and precisely adhering to the provided {schema_type}."
+                )
+        return instructions, prompt
+
+
+def _is_lite_llm(prompt_callable: PromptCallableBase) -> bool:
+    # Local helper for efficient type check
+    return type(prompt_callable) in (LiteLLMCallable, AsyncLiteLLMCallable)
