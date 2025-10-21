@@ -1,7 +1,7 @@
 import json
 from typing import Any, Callable, Dict, Optional, Union, List
 from opentelemetry.baggage import get_baggage
-from opentelemetry import context
+from opentelemetry import trace, context
 from opentelemetry.context import Context
 from opentelemetry.trace import Tracer, Span
 
@@ -10,6 +10,8 @@ from guardrails.stores.context import (
     get_tracer as get_context_tracer,
     get_tracer_context,
 )
+
+trace = None
 
 
 def get_tracer(tracer: Optional[Tracer] = None) -> Optional[Tracer]:
@@ -32,7 +34,8 @@ def get_span(span: Optional[Span] = None) -> Optional[Span]:
     if span is not None and hasattr(span, "add_event"):
         return span
     try:
-        from opentelemetry import trace
+        if trace is None:
+            return None
 
         current_context = get_current_context()
         current_span = trace.get_current_span(current_context)
@@ -46,12 +49,12 @@ def serialize(val: Any) -> Optional[str]:
     try:
         if val is None:
             return None
+        if isinstance(val, dict) or isinstance(val, list):
+            return json.dumps(val)
         if hasattr(val, "to_dict"):
             return json.dumps(val.to_dict())
-        elif hasattr(val, "__dict__"):
+        if hasattr(val, "__dict__"):
             return json.dumps(val.__dict__)
-        elif isinstance(val, dict) or isinstance(val, list):
-            return json.dumps(val)
         return str(val)
     except Exception:
         return None
@@ -61,14 +64,13 @@ def to_dict(val: Any) -> Dict:
     try:
         if val is None:
             return {}
-        elif isinstance(val, dict):
+        if isinstance(val, dict):
             return val
-        elif hasattr(val, "to_dict"):
+        if hasattr(val, "to_dict"):
             return val.to_dict()
-        elif hasattr(val, "__dict__"):
+        if hasattr(val, "__dict__"):
             return val.__dict__
-        else:
-            return dict(val)
+        return dict(val)
     except Exception:
         return {}
 
@@ -212,8 +214,8 @@ def recursive_key_operation(
     """
     if isinstance(data, str) and can_convert_to_dict(data):
         data_dict = json.loads(data)
-        data = str(recursive_key_operation(data_dict, operation, keys_to_match))
-    elif isinstance(data, dict):
+        return recursive_key_operation(data_dict, operation, keys_to_match)
+    if isinstance(data, dict):
         for key, value in data.items():
             if ismatchingkey(key, tuple(keys_to_match)) and isinstance(value, str):
                 # Apply the operation to the value of the matched key
@@ -222,7 +224,7 @@ def recursive_key_operation(
                 # Recursively process nested dictionaries or lists
                 data[key] = recursive_key_operation(value, operation, keys_to_match)
     elif isinstance(data, list):
-        for i in range(len(data)):
-            data[i] = recursive_key_operation(data[i], operation, keys_to_match)
+        for idx, item in enumerate(data):
+            data[idx] = recursive_key_operation(item, operation, keys_to_match)
 
     return data
