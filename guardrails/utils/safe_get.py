@@ -26,7 +26,20 @@ def safe_get(
     key: Any,
     default: Optional[Any] = None,
 ) -> Any:
+    # Fast path for dict
     if isinstance(container, dict):
         return container.get(key, default)
+    # Fast path for list and tuple (avoid function call; catch IndexError/TypeError directly)
+    elif isinstance(container, (list, tuple, str)):
+        try:
+            value = container[key]
+            if not value:
+                return default
+            return value
+        except Exception:
+            return default
     else:
+        # Fallback to original, potentially custom handling
+        from guardrails.utils.safe_get import safe_get_with_brackets
+
         return safe_get_with_brackets(container, key, default)
