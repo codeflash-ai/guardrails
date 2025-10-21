@@ -12,14 +12,10 @@ def get_use_remote_inference(rc: RC) -> Optional[bool]:
     Returns:
         Optional[bool]: The use_remote_inferencing setting, or None if not found.
     """
-    try:
-        use_remote_inferencing = rc.use_remote_inferencing
-        if isinstance(use_remote_inferencing, str):
-            return use_remote_inferencing.lower() == "true"
-        elif isinstance(use_remote_inferencing, bool):
-            return use_remote_inferencing
-        else:
-            return None
-    except AttributeError:
-        # If the attribute doesn't exist, return None
+    use_remote_inferencing = getattr(rc, "use_remote_inferencing", None)
+    if isinstance(use_remote_inferencing, bool):
+        return use_remote_inferencing
+    elif isinstance(use_remote_inferencing, str):
+        return use_remote_inferencing.lower() == "true"
+    else:
         return None
