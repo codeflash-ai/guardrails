@@ -21,9 +21,18 @@ def get_value_from_path(
 
     value = object
     for elem in path_elems:
+        if elem.isnumeric():
+            idx = int(elem)
+            if isinstance(value, (list, tuple)):
+                try:
+                    value = value[idx]
+                    if not value:
+                        value = None
+                except Exception:
+                    value = None
+                continue
         obj_value = safe_get(value, elem)
         if not obj_value and elem.isnumeric():
-            # value was empty but the key may be an array index
             value = safe_get(value, int(elem))
         else:
             value = obj_value
