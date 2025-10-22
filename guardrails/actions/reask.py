@@ -314,16 +314,15 @@ def get_reask_setup_for_string(
 def get_original_prompt(exec_options: Optional[GuardExecutionOptions] = None) -> str:
     exec_options = exec_options or GuardExecutionOptions()
     original_messages = exec_options.messages or []
-    messages_prompt = next(
-        (
-            h.get("content")
-            for h in original_messages
-            if isinstance(h, dict) and h.get("role") == "user"
-        ),
-        "",
-    )
-    original_prompt = messages_prompt or ""
-    return original_prompt
+    # Performance: Use a for-loop to avoid overhead of generator expressions and function calls inside `next`
+    for h in original_messages:
+        # Short-circuit before isinstance, only if it can be a dict
+        if type(h) is dict and h.get("role") == "user":
+            content = h.get("content")
+            if content:
+                return content
+            break  # "user" message found but empty content, break to return ""
+    return ""
 
 
 def get_reask_setup_for_json(
