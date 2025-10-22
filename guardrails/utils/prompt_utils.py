@@ -9,12 +9,13 @@ from guardrails.prompt.prompt import Prompt
 from guardrails.prompt.instructions import Instructions
 from guardrails.types.inputs import MessageHistory
 
+xml_const_regx = re.compile(r"gr\..*xml_.*")
+
 
 def prompt_uses_xml(prompt: str) -> bool:
-    xml_const_regx = re.compile(r"gr\..*xml_.*")
-    contains_xml_const = xml_const_regx.search(prompt) is not None
-    contains_xml_output = "xml_output_schema" in prompt
-    return contains_xml_output or contains_xml_const
+    if "xml_output_schema" in prompt:
+        return True
+    return xml_const_regx.search(prompt) is not None
 
 
 def prompt_content_for_string_schema(
