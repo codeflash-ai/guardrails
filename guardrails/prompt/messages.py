@@ -61,6 +61,8 @@ class Messages:
     ):
         """Format the messages using the given keyword arguments."""
         formatted_messages = []
+        # Precompute the keys for all kwargs, so repeated set intersection is O(1)
+        kwargs_keys = set(kwargs.keys())
         for message in self.source:
             if isinstance(message["content"], str):
                 msg_str = message["content"]
@@ -68,7 +70,7 @@ class Messages:
                 msg_str = message["content"]._source
             # Only use the keyword arguments that are present in the message.
             vars = get_template_variables(msg_str)
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k in vars}
+            filtered_kwargs = {k: kwargs[k] for k in vars if k in kwargs_keys}
 
             # Return another instance of the class with the formatted message.
             formatted_message = Template(msg_str).safe_substitute(**filtered_kwargs)
@@ -91,3 +93,9 @@ class Messages:
             text = template.safe_substitute(**mapping)
 
         return text
+
+
+def _filtered_kwargs(kwargs, vars):
+    # Efficient set intersection for needed kwargs
+    vars_set = set(vars)
+    return {k: kwargs[k] for k in vars_set & kwargs.keys()}
