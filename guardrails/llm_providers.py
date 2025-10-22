@@ -33,6 +33,20 @@ from guardrails.telemetry import trace_llm_call, trace_operation
 
 from guardrails.utils.prompt_utils import messages_to_prompt_string
 
+_litellm_completion = None
+
+_manifest_module = None
+
+_hf_PreTrainedModel = None
+
+_hf_TFPreTrainedModel = None
+
+_hf_FlaxPreTrainedModel = None
+
+_hf_GenerationMixin_generate = None
+
+_hf_Pipeline = None
+
 ###
 # Synchronous wrappers
 ###
@@ -511,14 +525,14 @@ def get_llm_ask(
     if "temperature" not in kwargs:
         kwargs.update({"temperature": 0})
 
-    try:
-        from litellm import completion
+    # Try LiteLLMCallable (litellm completion)
+    completion = _import_litellm_completion()
+    if completion and (
+        llm_api == completion or (llm_api is None and kwargs.get("model"))
+    ):
+        return LiteLLMCallable(*args, **kwargs)
 
-        if llm_api == completion or (llm_api is None and kwargs.get("model")):
-            return LiteLLMCallable(*args, **kwargs)
-    except ImportError:
-        pass
-
+    # ArbitraryCallable for GuardrailsEngine + engine_api
     if llm_api is not None:
         llm_self = getattr(llm_api, "__self__", None)
         if (
@@ -529,24 +543,25 @@ def get_llm_ask(
         ):
             return ArbitraryCallable(*args, llm_api=llm_api, **kwargs)
 
-    try:
-        import manifest  # noqa: F401 # type: ignore
+    # ManifestCallable
+    manifest_mod = _import_manifest()
+    if manifest_mod and isinstance(llm_api, manifest_mod.Manifest):
+        return ManifestCallable(*args, client=llm_api, **kwargs)
 
-        if isinstance(llm_api, manifest.Manifest):
-            return ManifestCallable(*args, client=llm_api, **kwargs)
-    except ImportError:
-        pass
-
-    try:
-        from transformers import (  # noqa: F401 # type: ignore
-            FlaxPreTrainedModel,
-            GenerationMixin,
-            PreTrainedModel,
-            TFPreTrainedModel,
-        )
-
+    # HuggingFaceModelCallable
+    (
+        PreTrainedModel,
+        TFPreTrainedModel,
+        FlaxPreTrainedModel,
+        GenerationMixin_generate,
+    ) = _import_hf_models()
+    if (
+        PreTrainedModel
+        and TFPreTrainedModel
+        and FlaxPreTrainedModel
+        and GenerationMixin_generate
+    ):
         api_self = getattr(llm_api, "__self__", None)
-
         if (
             isinstance(api_self, PreTrainedModel)
             or isinstance(api_self, TFPreTrainedModel)
@@ -554,25 +569,18 @@ def get_llm_ask(
         ):
             if (
                 hasattr(llm_api, "__func__")
-                and llm_api.__func__ == GenerationMixin.generate  # type: ignore
+                and llm_api.__func__ == GenerationMixin_generate  # type: ignore
             ):
                 return HuggingFaceModelCallable(*args, model_generate=llm_api, **kwargs)
             raise ValueError("Only text generation models are supported at this time.")
-    except ImportError:
-        pass
 
-    try:
-        from transformers import Pipeline  # noqa: F401 # type: ignore
-
-        if isinstance(llm_api, Pipeline):
-            # Couldn't find a constant for this
-            if llm_api.task == "text-generation":
-                return HuggingFacePipelineCallable(*args, pipeline=llm_api, **kwargs)
-            raise ValueError(
-                "Only text generation pipelines are supported at this time."
-            )
-    except ImportError:
-        pass
+    # HuggingFacePipelineCallable
+    Pipeline = _import_hf_pipeline()
+    if Pipeline and isinstance(llm_api, Pipeline):
+        # Couldn't find a constant for this
+        if llm_api.task == "text-generation":
+            return HuggingFacePipelineCallable(*args, pipeline=llm_api, **kwargs)
+        raise ValueError("Only text generation pipelines are supported at this time.")
 
     # Let the user pass in an arbitrary callable.
     if llm_api is not None:
@@ -860,6 +868,7 @@ class AsyncArbitraryCallable(AsyncPromptCallableBase):
 def get_async_llm_ask(
     llm_api: Callable[..., Awaitable[Any]], *args, **kwargs
 ) -> AsyncPromptCallableBase:
+    # Try AsyncLiteLLMCallable
     try:
         import litellm
 
@@ -868,13 +877,10 @@ def get_async_llm_ask(
     except ImportError:
         pass
 
-    try:
-        import manifest  # noqa: F401 # type: ignore
-
-        if isinstance(llm_api, manifest.Manifest):
-            return AsyncManifestCallable(*args, client=llm_api, **kwargs)
-    except ImportError:
-        pass
+    # AsyncManifestCallable
+    manifest_mod = _import_manifest()
+    if manifest_mod and isinstance(llm_api, manifest_mod.Manifest):
+        return AsyncManifestCallable(*args, client=llm_api, **kwargs)
 
     if llm_api is not None:
         return AsyncArbitraryCallable(*args, llm_api=llm_api, **kwargs)
@@ -907,3 +913,70 @@ def get_llm_api_enum(
 
     else:
         return None
+
+
+def _import_litellm_completion():
+    global _litellm_completion
+    if _litellm_completion is None:
+        try:
+            from litellm import completion
+
+            _litellm_completion = completion
+        except ImportError:
+            _litellm_completion = False
+    return _litellm_completion
+
+
+def _import_manifest():
+    global _manifest_module
+    if _manifest_module is None:
+        try:
+            import manifest  # noqa: F401 # type: ignore
+
+            _manifest_module = manifest
+        except ImportError:
+            _manifest_module = False
+    return _manifest_module
+
+
+def _import_hf_models():
+    global \
+        _hf_PreTrainedModel, \
+        _hf_TFPreTrainedModel, \
+        _hf_FlaxPreTrainedModel, \
+        _hf_GenerationMixin_generate
+    if _hf_PreTrainedModel is None:
+        try:
+            from transformers import (
+                FlaxPreTrainedModel,
+                GenerationMixin,
+                PreTrainedModel,
+                TFPreTrainedModel,
+            )
+
+            _hf_PreTrainedModel = PreTrainedModel
+            _hf_TFPreTrainedModel = TFPreTrainedModel
+            _hf_FlaxPreTrainedModel = FlaxPreTrainedModel
+            _hf_GenerationMixin_generate = GenerationMixin.generate
+        except ImportError:
+            _hf_PreTrainedModel = _hf_TFPreTrainedModel = _hf_FlaxPreTrainedModel = (
+                _hf_GenerationMixin_generate
+            ) = False
+    return (
+        _hf_PreTrainedModel,
+        _hf_TFPreTrainedModel,
+        _hf_FlaxPreTrainedModel,
+        _hf_GenerationMixin_generate,
+    )
+
+
+def _import_hf_pipeline():
+    global _hf_Pipeline
+    if _hf_Pipeline is None:
+        try:
+            from transformers import Pipeline  # noqa: F401 # type: ignore
+
+            _hf_Pipeline = Pipeline
+        except ImportError:
+            _hf_Pipeline = False
+    return _hf_Pipeline
