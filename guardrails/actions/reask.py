@@ -119,7 +119,7 @@ def get_reask_subschema(
     Returns:
         A JSON Schema.
     """
-    root = deepcopy(json_schema)
+    root = json_schema.copy()
 
     if reasks is None:
         return root
