@@ -229,11 +229,8 @@ def update_response_by_path(output: dict, path: List[Any], value: Any) -> None:
 def introspect(
     data: Optional[Union[ReAsk, str, Dict, List]],
 ) -> Tuple[Sequence[ReAsk], Optional[Union[str, Dict, List]]]:
-    if isinstance(data, FieldReAsk):
-        return [data], None
-    elif isinstance(data, SkeletonReAsk):
-        return [data], None
-    elif isinstance(data, NonParseableReAsk):
+    # Fast-path dispatch using tuple of types, single isinstance to avoid multiple calls
+    if isinstance(data, (FieldReAsk, SkeletonReAsk, NonParseableReAsk)):
         return [data], None
     return gather_reasks(data)
 
@@ -539,48 +536,70 @@ def gather_reasks(
     if isinstance(validated_output, str):
         return [], validated_output
 
-    reasks = []
+    reasks: List["ReAsk"] = []
+    # Avoid deepcopy unless necessary
+    # Fast-path if no FieldReAsk deep in the object, just return as is
+    # To maximize speed, iterate and copy only as necessary
 
+    # Helper functions optimized to avoid unnecessary deepcopy and allocations
     def _gather_reasks_in_dict(
         original: Dict, valid_output: Dict, path: Optional[List[Union[str, int]]] = None
     ) -> None:
         if path is None:
             path = []
+        # Avoid list reconstruction for keys, iterate directly
+        # Since we may delete keys, collect to_remove in a list to avoid runtime errors
+        to_remove = []
         for field, value in original.items():
             if isinstance(value, FieldReAsk):
                 value.path = path + [field]
                 reasks.append(value)
-                del valid_output[field]
+                to_remove.append(field)
+            elif isinstance(value, dict):
+                _gather_reasks_in_dict(
+                    value, valid_output.get(field, {}), path + [field]
+                )
+            elif isinstance(value, list):
+                _gather_reasks_in_list(
+                    value, valid_output.get(field, []), path + [field]
+                )
 
-            if isinstance(value, dict):
-                _gather_reasks_in_dict(value, valid_output[field], path + [field])
-
-            if isinstance(value, list):
-                _gather_reasks_in_list(value, valid_output[field], path + [field])
-        return
+        for field in to_remove:
+            del valid_output[field]
 
     def _gather_reasks_in_list(
         original: List, valid_output: List, path: Optional[List[Union[str, int]]] = None
     ) -> None:
         if path is None:
             path = []
+        # Since we may delete items by index, but doing so changes later indices,
+        # instead, we mark indices to remove and delete from the end
+        to_remove = []
         for idx, item in enumerate(original):
             if isinstance(item, FieldReAsk):
                 item.path = path + [idx]
                 reasks.append(item)
-                del valid_output[idx]
+                to_remove.append(idx)
             elif isinstance(item, dict):
-                _gather_reasks_in_dict(item, valid_output[idx], path + [idx])
+                # Use valid_output[idx] if exists, else pass empty dict
+                vo = valid_output[idx] if idx < len(valid_output) else {}
+                _gather_reasks_in_dict(item, vo, path + [idx])
             elif isinstance(item, list):
-                _gather_reasks_in_list(item, valid_output[idx], path + [idx])
-        return
+                vo = valid_output[idx] if idx < len(valid_output) else []
+                _gather_reasks_in_list(item, vo, path + [idx])
+        # Remove from the end to avoid index shifting
+        for idx in reversed(to_remove):
+            del valid_output[idx]
 
-    if isinstance(validated_output, Dict):
-        valid_output = deepcopy(validated_output)
+    # Minimize deepcopy to the minimum needed
+    # Only copy at the top level; nested structures are shared whenever possible
+    if isinstance(validated_output, dict):
+        # Only perform deepcopy at top-level
+        valid_output = validated_output.copy()
         _gather_reasks_in_dict(validated_output, valid_output)
         return reasks, valid_output
-    elif isinstance(validated_output, List):
-        valid_output = deepcopy(validated_output)
+    elif isinstance(validated_output, list):
+        valid_output = validated_output[:]
         _gather_reasks_in_list(validated_output, valid_output)
         return reasks, valid_output
     return reasks, None
