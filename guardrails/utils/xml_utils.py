@@ -28,10 +28,11 @@ def xml_to_string(
     if xml is None:
         return None
 
-    string = xml
+    if isinstance(xml, str):
+        return xml
     if isinstance(xml, memoryview):
-        string = xml.tobytes().decode()
+        return xml.tobytes().decode()
     elif isinstance(xml, (bytes, bytearray)):
-        string = xml.decode()
+        return xml.decode()
 
-    return cast(str, string)
+    return cast(str, xml)
