@@ -24,12 +24,14 @@ class ValidatorReference(IValidatorReference):
     @classmethod
     def from_interface(cls, interface: IValidatorReference) -> "ValidatorReference":
         """Create a ValidatorReference from an interface."""
+        # Use local variable assignment to avoid repeated attribute lookups
+        iface = interface
         return cls(
-            id=interface.id,
-            on=interface.on,
-            on_fail=interface.on_fail,  # type: ignore
-            args=interface.args,
-            kwargs=interface.kwargs,
+            id=iface.id,
+            on=iface.on,
+            on_fail=iface.on_fail,  # type: ignore
+            args=iface.args,
+            kwargs=iface.kwargs,
         )
 
     def to_dict(self) -> Dict[str, Any]:
