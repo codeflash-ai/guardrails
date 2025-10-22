@@ -17,10 +17,11 @@ class Instructions(BasePrompt):
 
     def __repr__(self) -> str:
         # Truncate the prompt to 50 characters and add ellipsis if it's longer.
-        truncated_instructions = self.source[:50]
-        if len(self.source) > 50:
-            truncated_instructions += "..."
-        return f"Instructions({truncated_instructions})"
+        src = self.source
+        if len(src) > 50:
+            return f"Instructions({src[:50]}...)"
+        else:
+            return f"Instructions({src})"
 
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, Instructions) and self.source == __value.source
