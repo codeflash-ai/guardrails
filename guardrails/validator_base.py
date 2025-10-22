@@ -42,8 +42,8 @@ def split_sentence_str(chunk: str):
     """A naive sentence splitter that splits on periods."""
     if "." not in chunk:
         return []
-    fragments = chunk.split(".")
-    return [fragments[0] + ".", ".".join(fragments[1:])]
+    pos = chunk.find(".")
+    return [chunk[: pos + 1], chunk[pos + 1 :]]
 
 
 def split_sentence_word_tokenizers_jl_separator(
