@@ -9,19 +9,21 @@ def get_template(template_name: str) -> tuple[dict, str]:
     if template_name.endswith(".json"):
         template_file_name = template_name
         try:
-            file_path = os.path.join(os.getcwd(), template_name)
-            with open(file_path, "r") as fin:
+            file_path = os.path.abspath(template_name)
+            with open(file_path, "r", encoding="utf-8") as fin:
                 return json.load(fin), template_file_name
         except FileNotFoundError:
             raise FileNotFoundError(f"Template file {template_name} not found.")
 
-    template_file_name = f"{template_name.split('/')[-1]}.json"
+    name_split = template_name.split("/")
+    template_file_base = name_split[-1]
+    template_file_name = f"{template_file_base}.json"
 
     template = get_guard_template(template_name)
 
     # write template to file
-    out_path = os.path.join(os.getcwd(), template_file_name)
-    with open(out_path, "wt") as file_out:
-        file_out.write(json.dumps(template, indent=4))
+    out_path = os.path.abspath(template_file_name)
+    with open(out_path, "w", encoding="utf-8") as file_out:
+        json.dump(template, file_out, indent=4)
 
     return template, template_file_name

@@ -1,17 +1,16 @@
-import sys
 import os
+import sys
 from string import Template
 from typing import Any, Dict, Optional
 
+import jwt
 import requests
 from guardrails_hub_types import Manifest
-import jwt
-from jwt import ExpiredSignatureError, DecodeError
+from jwt import DecodeError, ExpiredSignatureError
 
-
-from guardrails.settings import settings
 from guardrails.classes.rc import RC
 from guardrails.cli.logger import logger
+from guardrails.settings import settings
 from guardrails.version import GUARDRAILS_VERSION
 
 FIND_NEW_TOKEN = "You can find a new token at https://hub.guardrailsai.com/keys"
