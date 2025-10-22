@@ -156,10 +156,7 @@ def ismatchingkey(
         bool: True if any of the keys to match are found in the target key,
               False otherwise.
     """
-    for k in keys_to_match:
-        if k in target_key:
-            return True
-    return False
+    return any(k in target_key for k in keys_to_match)
 
 
 def can_convert_to_dict(s: str) -> bool:
@@ -210,19 +207,32 @@ def recursive_key_operation(
         with the operation applied to the values of matched keys. The return type
         matches the input type (dict, list, or str).
     """
-    if isinstance(data, str) and can_convert_to_dict(data):
-        data_dict = json.loads(data)
-        data = str(recursive_key_operation(data_dict, operation, keys_to_match))
+    # Pre-convert keys_to_match to tuple once for efficiency, as required by ismatchingkey
+    keys_to_match_tuple = tuple(keys_to_match)
+
+    # Optimize string branch: avoid calling can_convert_to_dict twice, and avoid unnecessary conversion
+    if isinstance(data, str):
+        # Quickly skip strings which aren't possibly JSON objects/lists
+        s_strip = data.lstrip()
+        if not (s_strip and (s_strip[0] == "{" or s_strip[0] == "[")):
+            return data
+        try:
+            data_dict = json.loads(data)
+        except (ValueError, TypeError):
+            return data
+        # Recursively apply to the loaded dict/list
+        result = recursive_key_operation(data_dict, operation, keys_to_match)
+        # Must preserve original behavior: returns str if input is str
+        return str(result)
     elif isinstance(data, dict):
+        # Items view is safe for mutation as we're only updating values
         for key, value in data.items():
-            if ismatchingkey(key, tuple(keys_to_match)) and isinstance(value, str):
-                # Apply the operation to the value of the matched key
+            if ismatchingkey(key, keys_to_match_tuple) and isinstance(value, str):
                 data[key] = operation(value)
             else:
-                # Recursively process nested dictionaries or lists
                 data[key] = recursive_key_operation(value, operation, keys_to_match)
     elif isinstance(data, list):
-        for i in range(len(data)):
-            data[i] = recursive_key_operation(data[i], operation, keys_to_match)
-
+        # Use enumerate for slightly more efficient assignment inside the loop
+        for i, item in enumerate(data):
+            data[i] = recursive_key_operation(item, operation, keys_to_match)
     return data
