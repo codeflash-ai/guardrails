@@ -4,12 +4,17 @@ import semver
 from importlib.metadata import version
 from rich.console import Console
 
+_guardrails_version = None
+
 
 GUARDRAILS_PACKAGE_NAME = "guardrails-ai"
 
 
 def get_guardrails_version():
-    return version(GUARDRAILS_PACKAGE_NAME)
+    global _guardrails_version
+    if _guardrails_version is None:
+        _guardrails_version = version(GUARDRAILS_PACKAGE_NAME)
+    return _guardrails_version
 
 
 def version_warnings_if_applicable(console: Console):
