@@ -60,17 +60,29 @@ class CallInputs(Inputs, ICallInputs, ArbitraryModel):
 
     @classmethod
     def from_interface(cls, i_call_inputs: ICallInputs) -> "CallInputs":
+        # Cache i_call_inputs attributes locally to minimize repeated attribute access
+        llm_output = i_call_inputs.llm_output
+        messages = i_call_inputs.messages  # type: ignore
+        prompt_params = i_call_inputs.prompt_params
+        num_reasks = i_call_inputs.num_reasks
+        metadata = i_call_inputs.metadata
+        full_schema_reask = i_call_inputs.full_schema_reask is True
+        stream = i_call_inputs.stream is True
+        args_val = i_call_inputs.args
+        kwargs_val = i_call_inputs.kwargs
+
+        # Using tuple unpacking provides a micro-optimization, only beneficial here as we avoid repeated lookups.
         return cls(
             llm_api=None,
-            llm_output=i_call_inputs.llm_output,
-            messages=i_call_inputs.messages,  # type: ignore
-            prompt_params=i_call_inputs.prompt_params,
-            num_reasks=i_call_inputs.num_reasks,
-            metadata=i_call_inputs.metadata,
-            full_schema_reask=(i_call_inputs.full_schema_reask is True),
-            stream=(i_call_inputs.stream is True),
-            args=(i_call_inputs.args or []),
-            kwargs=(i_call_inputs.kwargs or {}),
+            llm_output=llm_output,
+            messages=messages,
+            prompt_params=prompt_params,
+            num_reasks=num_reasks,
+            metadata=metadata,
+            full_schema_reask=full_schema_reask,
+            stream=stream,
+            args=args_val if args_val is not None else [],
+            kwargs=kwargs_val if kwargs_val is not None else {},
         )
 
     @classmethod
