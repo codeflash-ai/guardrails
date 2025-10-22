@@ -40,8 +40,9 @@ from guardrails.utils.prompt_utils import messages_to_prompt_string
 
 def nonchat_prompt(prompt: str, instructions: Optional[str] = None) -> str:
     """Prepare final prompt for nonchat engine."""
+    # Optimize string concatenation by avoiding unnecessary list creation
     if instructions:
-        prompt = "\n\n".join([instructions, prompt])
+        return instructions + "\n\n" + prompt
     return prompt
 
 
