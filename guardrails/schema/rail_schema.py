@@ -434,20 +434,20 @@ class Format:
 def extract_internal_format(format: str) -> Format:
     fmt = Format()
 
-    internal, *custom_rest = format.split("; ")
+    internal, sep, custom = format.partition("; ")
+    fmt.custom_format = custom if sep else ""
 
-    fmt.custom_format = "; ".join(custom_rest)
+    internal_type, sep2, format_attr_rest = internal.partition(": ")
 
-    internal_type, *format_attr_rest = internal.split(": ")
-
-    if not RailTypes.get(internal_type):
+    rail_type = RailTypes.get(internal_type)
+    if not rail_type:
         # This format wasn't manipulated by us,
         # it just happened to match our pattern
         fmt.custom_format = format
         return fmt
 
-    fmt.internal_type = RailTypes.get(internal_type)
-    fmt.internal_format_attr = ": ".join(format_attr_rest)
+    fmt.internal_type = rail_type
+    fmt.internal_format_attr = format_attr_rest
 
     return fmt
 
