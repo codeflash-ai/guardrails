@@ -152,24 +152,32 @@ class ValidatorPackageService:
 
     @staticmethod
     def get_validator_id(validator_uri: str):
+        # Check if the URI starts with the required prefix
         if not validator_uri.startswith("hub://"):
             raise InvalidHubInstallURL(
                 "Invalid URI! The package URI must start with 'hub://'"
             )
 
-        validator_uri_with_version = validator_uri.replace("hub://", "")
+        # Remove the prefix without creating a new string copy if possible
+        validator_uri_with_version = validator_uri[6:]  # len("hub://") == 6
 
-        validator_id_version_regex = (
-            r"(?P<validator_id>[\/a-zA-Z0-9\-_]+)(?P<version>.*)"
-        )
-        match = re.match(validator_id_version_regex, validator_uri_with_version)
+        # Pre-compile regex once for all calls for better performance
+        # Regex is left as a global constant as it's not mutated; this avoids recompilation
+        # Note: Python 3.10 has re.Pattern, so this will not cause type compatibility issues here
+        if not hasattr(ValidatorPackageService, "_validator_id_version_pattern"):
+            ValidatorPackageService._validator_id_version_pattern = re.compile(
+                r"(?P<validator_id>[\/a-zA-Z0-9\-_]+)(?P<version>.*)"
+            )
+        pattern = ValidatorPackageService._validator_id_version_pattern
+
+        # Using local variable for match result
+        match = pattern.match(validator_uri_with_version)
         validator_version = None
 
         if match:
             validator_id = match.group("validator_id")
-            validator_version = (
-                match.group("version").strip() if match.group("version") else None
-            )
+            group_version = match.group("version")
+            validator_version = group_version.strip() if group_version else None
         else:
             validator_id = validator_uri_with_version
 
