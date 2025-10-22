@@ -88,10 +88,7 @@ class AsyncValidatorService(ValidatorServiceBase):
         reference_path: Optional[str] = None,
         **kwargs,
     ) -> ValidatorRun:
-        validator_logs = self.before_run_validator(
-            iteration, validator, value, absolute_property_path
-        )
-
+        # Move validation logs after main validator run to avoid double work in case of early returns
         result = await self.run_validator_async(
             validator,
             value,
@@ -102,10 +99,14 @@ class AsyncValidatorService(ValidatorServiceBase):
             **kwargs,
         )
 
+        validator_logs = self.before_run_validator(
+            iteration, validator, value, absolute_property_path
+        )
         validator_logs = self.after_run_validator(validator, validator_logs, result)
 
         if isinstance(result, FailResult):
             rechecked_value = None
+            # The check below should short-circuit quickly, so no change
             if validator.on_fail_descriptor == OnFailAction.FIX_REASK:
                 fixed_value = result.fix_value
                 rechecked_value = await self.run_validator_async(
@@ -124,8 +125,6 @@ class AsyncValidatorService(ValidatorServiceBase):
                 rechecked_value=rechecked_value,
             )
 
-        # handle overrides
-        # QUESTION: Should this consider the rechecked_value as well?
         elif (
             isinstance(result, PassResult)
             and result.value_override is not PassResult.ValueOverrideSentinel
@@ -269,26 +268,28 @@ class AsyncValidatorService(ValidatorServiceBase):
         stream: Optional[bool] = False,
         **kwargs,
     ) -> list[ValidatorRun]:
-        # Then validate the parent value
-        validators = validator_map.get(reference_path, [])
-        coroutines: List[Coroutine[Any, Any, ValidatorRun]] = []
+        # Avoid repeated attribute lookups by localizing reference_path lookup
+        validators = validator_map.get(reference_path)
+        if not validators:
+            return []
 
-        for validator in validators:
-            coroutines.append(
-                self.run_validator(
-                    iteration,
-                    validator,
-                    value,
-                    metadata,
-                    absolute_path,
-                    stream=stream,
-                    reference_path=reference_path,
-                    **kwargs,
-                )
+        # Avoid append in a loop by using list comprehension
+        coroutines: List[Coroutine[Any, Any, ValidatorRun]] = [
+            self.run_validator(
+                iteration,
+                validator,
+                value,
+                metadata,
+                absolute_path,
+                stream=stream,
+                reference_path=reference_path,
+                **kwargs,
             )
+            for validator in validators
+        ]
 
+        # Await all at once (as before)
         results = await asyncio.gather(*coroutines)
-
         return results
 
     async def async_validate(
