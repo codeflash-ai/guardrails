@@ -19,9 +19,13 @@ class RC(Serializeable):
 
     @staticmethod
     def exists() -> bool:
-        home = expanduser("~")
-        guardrails_rc = os.path.join(home, ".guardrailsrc")
-        return os.path.exists(guardrails_rc)
+        # Cache the home directory to avoid recomputing expanduser("~") every call
+        # This optimization is safe because the home directory doesn't change during runtime
+        # and the location of the .guardrailsrc file is fixed for the user context
+        if not hasattr(RC.exists, "_guardrails_rc"):
+            home = expanduser("~")
+            RC.exists._guardrails_rc = os.path.join(home, ".guardrailsrc")
+        return os.path.exists(RC.exists._guardrails_rc)
 
     @classmethod
     def load(cls, logger: Optional[logging.Logger] = None) -> "RC":
