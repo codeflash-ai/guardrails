@@ -11,7 +11,13 @@ def cast_xml_to_string(xml_value: Union[memoryview, bytes, bytearray, str]) -> s
     Returns:
         str: The XML value as a string.
     """
-    return cast(str, xml_to_string(xml_value))
+    if isinstance(xml_value, str):
+        return xml_value
+    if isinstance(xml_value, memoryview):
+        return xml_value.tobytes().decode()
+    if isinstance(xml_value, (bytes, bytearray)):
+        return xml_value.decode()
+    return cast(str, xml_value)
 
 
 def xml_to_string(
