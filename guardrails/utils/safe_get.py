@@ -28,5 +28,10 @@ def safe_get(
 ) -> Any:
     if isinstance(container, dict):
         return container.get(key, default)
+    elif isinstance(container, tuple):
+        try:
+            return container[key]
+        except Exception:
+            return default
     else:
         return safe_get_with_brackets(container, key, default)
