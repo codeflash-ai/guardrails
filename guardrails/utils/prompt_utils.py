@@ -22,22 +22,21 @@ def prompt_content_for_string_schema(
 ) -> str:
     # NOTE: Is this actually necessary?
     # We should check how LLMs perform this this vs just sending the JSON Schema
-    prompt_content = ""
+    parts = []
     description = output_schema.get("description")
     if description:
-        prompt_content += (
+        parts.append(
             f"Here's a description of what I want you to generate: {description}"
         )
     validators = validator_map.get(json_path, [])
     if len(validators):
-        prompt_content += (
+        parts.append(
             "\n\nYour generated response should satisfy the following properties:"
         )
         for validator in validators:
-            prompt_content += f"\n- {validator.to_prompt()}"
-
-    prompt_content += "\n\nDon't talk; just go."
-    return prompt_content
+            parts.append(f"\n- {validator.to_prompt()}")
+    parts.append("\n\nDon't talk; just go.")
+    return "".join(parts)
 
 
 # Supersedes Schema.transpile
