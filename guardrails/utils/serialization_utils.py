@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from guardrails.classes.generic.default_json_encoder import DefaultJSONEncoder
 
+_default_json_encoder_instance = DefaultJSONEncoder()
+
 
 # This is the same logic as the DefaultJSONEncoder but without stringifying everything
 def to_dict(o):
@@ -28,7 +30,7 @@ def to_dict(o):
 # TODO: What other common cases we should consider?
 def serialize(val: Any) -> Optional[str]:
     try:
-        return json.dumps(val, cls=DefaultJSONEncoder)
+        return _default_json_encoder_instance.encode(val)
     except Exception as e:
         warnings.warn(str(e))
         return None
