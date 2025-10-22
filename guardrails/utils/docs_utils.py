@@ -26,16 +26,18 @@ def messages_to_prompt_string(
         list[dict[str, t.Union[str, Prompt, Instructions]]], MessageHistory
     ],
 ) -> str:
-    messages_copy = ""
+    # Pre-fetch Prompt and Instructions as tuple for faster isinstance checks
+    _prompt_types = (Prompt, Instructions)
+    # Use list to collect strings and join at end for better performance
+    content_list = []
     for msg in messages:
-        content = (
-            msg["content"].source  # type: ignore
-            if isinstance(msg["content"], Prompt)
-            or isinstance(msg["content"], Instructions)  # type: ignore
-            else msg["content"]  # type: ignore
-        )
-        messages_copy += content
-    return messages_copy
+        content_obj = msg["content"]  # type: ignore
+        if isinstance(content_obj, _prompt_types):  # type: ignore
+            content = content_obj.source
+        else:
+            content = content_obj
+        content_list.append(content)
+    return "".join(content_list)
 
 
 class TextSplitter:
