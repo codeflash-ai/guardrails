@@ -8,8 +8,9 @@ import re
 
 
 def replace_til_no_change(input_text, pattern, replacement):
+    compiled = re.compile(pattern) if not isinstance(pattern, re.Pattern) else pattern
     while True:
-        new_text = re.sub(pattern, replacement, input_text)
+        new_text = compiled.sub(replacement, input_text)
         if new_text == input_text:
             break
         input_text = new_text
