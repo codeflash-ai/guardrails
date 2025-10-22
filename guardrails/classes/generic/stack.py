@@ -5,11 +5,20 @@ T = TypeVar("T")
 
 class Stack(List[T]):
     def __init__(self, *args):
-        super().__init__(args)
+        # Avoid passing args as a tuple - unpack to construct the list directly for better performance and consistent behavior
+        super().__init__(
+            args
+            if len(args) != 1
+            else args[0]
+            if isinstance(args[0], (list, tuple))
+            else args
+        )
 
     def empty(self) -> bool:
         """Tests if this stack is empty."""
-        return len(self) == 0
+        # Bypass len() for List classes: bool(self) is more efficient as it just checks __bool__ (inherited from list)
+        # and returns True if non-empty, False otherwise.
+        return not self
 
     def peek(self) -> Optional[T]:
         """Looks at the object at the top (last/most recently added) of this
