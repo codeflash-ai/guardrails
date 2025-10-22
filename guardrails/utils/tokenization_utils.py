@@ -8,8 +8,9 @@ import re
 
 
 def replace_til_no_change(input_text, pattern, replacement):
+    compiled_pattern = re.compile(pattern)
     while True:
-        new_text = re.sub(pattern, replacement, input_text)
+        new_text = compiled_pattern.sub(replacement, input_text)
         if new_text == input_text:
             break
         input_text = new_text
@@ -35,82 +36,61 @@ def postproc_splits(sentences, separator):
     # Remove Windows line endings
     sentences = sentences.replace("\r", "")
 
-    # Breaks sometimes missing after "?", "safe" cases
+    # Precompile separator regex form once
+    escaped_separator = re.escape(separator)
+
+    # Precompile regex patterns for efficiency
+    patterns = [
+        # Breaks sometimes missing after "?", "safe" cases
+        (re.compile(r"\b([a-z]+\?)\s+([A-Z][a-z]+)\b"), rf"\1{separator}\2"),
+        # Breaks sometimes missing after ".", "safe" cases
+        (re.compile(r"\b([a-z]+ \.)\s+([A-Z][a-z]+)\b"), rf"\1{separator}\2"),
+        # No breaks producing lines only containing sentence-ending punctuation
+        (re.compile(rf"{escaped_separator}([.!?]+){escaped_separator}"), r"\1" + separator),
+    ]
+    for pat, repl in patterns:
+        sentences = pat.sub(repl, sentences)
+
+    # Patterns with replace_til_no_change, use precompiled for efficiency
+    til_patterns = [
+        (r"\[([^\[\]\(\)]*)" + escaped_separator + r"([^\[\]\(\)]*)\]", r"[\1 \2]"),
+        (r"\(([^\[\]\(\)]*)" + escaped_separator + r"([^\[\]\(\)]*)\)", r"(\1 \2)"),
+        (r"\[([^\[\]]{0,250})" + escaped_separator + r"([^\[\]]{0,250})\]", r"[\1 \2]"),
+        (r"\(([^\(\)]{0,250})" + escaped_separator + r"([^\(\)]{0,250})\)", r"(\1 \2)"),
+        (r'"([^"\n]{0,250})' + escaped_separator + r'([^"\n]{0,250})"', r'"\1 \2"'),
+        (r"'([^'\n]{0,250})" + escaped_separator + r"([^'\n]{0,250})'", r"'\1 \2'"),
+        (
+            r"\[((?:[^\[\]]|\[[^\[\]]*\]){0,250})"
+            + escaped_separator
+            + r"((?:[^\[\]]|\[[^\[\]]*\]){0,250})\]",
+            r"[\1 \2]",
+        ),
+        (
+            r"\(((?:[^\(\)]|\([^\(\)]*\)){0,250})"
+            + escaped_separator
+            + r"((?:[^\(\)]|\([^\(\)]*\)){0,250})\)",
+            r"(\1 \2)",
+        ),
+    ]
+    for pat, repl in til_patterns:
+        sentences = replace_til_no_change(sentences, pat, repl)
+
+    # Precompiled regex for performance
     sentences = re.sub(
-        r"\b([a-z]+\?)\s+([A-Z][a-z]+)\b", rf"\1{separator}\2", sentences
+        rf"\.{escaped_separator}([a-z]{{3,}}[a-z-]*[ .:,])", r". \1", sentences
     )
-    # Breaks sometimes missing after ".", "safe" cases
+
     sentences = re.sub(
-        r"\b([a-z]+ \.)\s+([A-Z][a-z]+)\b", rf"\1{separator}\2", sentences
+        rf"(\b[A-HJ-Z]\.){escaped_separator}", r"\1 ", sentences
     )
 
-    # No breaks producing lines only containing sentence-ending punctuation
-    sentences = re.sub(rf"{separator}([.!?]+){separator}", r"\1" + separator, sentences)
+    # Precompile regex for coordinating conjunctions
+    cc_pattern = re.compile(rf"{escaped_separator}(and|or|but|nor|yet)\s")
+    sentences = cc_pattern.sub(lambda m: " " + m.group(1) + " ", sentences)
 
-    # No breaks inside parentheses/brackets
-    sentences = replace_til_no_change(
-        sentences,
-        r"\[([^\[\]\(\)]*)" + re.escape(separator) + r"([^\[\]\(\)]*)\]",
-        r"[\1 \2]",
-    )
-    sentences = replace_til_no_change(
-        sentences,
-        r"\(([^\[\]\(\)]*)" + re.escape(separator) + r"([^\[\]\(\)]*)\)",
-        r"(\1 \2)",
-    )
-    # Standard mismatched with possible intervening
-    sentences = replace_til_no_change(
-        sentences,
-        r"\[([^\[\]]{0,250})" + re.escape(separator) + r"([^\[\]]{0,250})\]",
-        r"[\1 \2]",
-    )
-    sentences = replace_til_no_change(
-        sentences,
-        r"\(([^\(\)]{0,250})" + re.escape(separator) + r"([^\(\)]{0,250})\)",
-        r"(\1 \2)",
-    )
-
-    # Line breaks within quotes
-    sentences = replace_til_no_change(
-        sentences,
-        r'"([^"\n]{0,250})' + re.escape(separator) + r'([^"\n]{0,250})"',
-        r'"\1 \2"',
-    )
-    sentences = replace_til_no_change(
-        sentences,
-        r"'([^'\n]{0,250})" + re.escape(separator) + r"([^'\n]{0,250})'",
-        r"'\1 \2'",
-    )
-
-    # Nesting to depth one
-    sentences = replace_til_no_change(
-        sentences,
-        r"\[((?:[^\[\]]|\[[^\[\]]*\]){0,250})"
-        + re.escape(separator)
-        + r"((?:[^\[\]]|\[[^\[\]]*\]){0,250})\]",
-        r"[\1 \2]",
-    )
-    sentences = replace_til_no_change(
-        sentences,
-        r"\(((?:[^\(\)]|\([^\(\)]*\)){0,250})"
-        + re.escape(separator)
-        + r"((?:[^\(\)]|\([^\(\)]*\)){0,250})\)",
-        r"(\1 \2)",
-    )
-
-    # No break after periods followed by a non-uppercase "normal word"
-    sentences = re.sub(rf"\.{separator}([a-z]{{3,}}[a-z-]*[ .:,])", r". \1", sentences)
-
-    # No break after a single letter other than I
-    sentences = re.sub(rf"(\b[A-HJ-Z]\.){separator}", r"\1 ", sentences)
-
-    # No break before coordinating conjunctions (CC)
-    coordinating_conjunctions = ["and", "or", "but", "nor", "yet"]
-    for cc in coordinating_conjunctions:
-        sentences = re.sub(rf"{separator}({cc}\s)", r" \1", sentences)
-
-    # No break before prepositions (IN)
-    prepositions = [
+    # Precompile regexes for prepositions
+    # This composite pattern matches any preposition (words are unique, so joining is safe)
+    prep_regex_str = "|".join(sorted(prepositions := [
         "of",
         "in",
         "by",
@@ -134,16 +114,16 @@ def postproc_splits(sentences, separator):
         "between",
         "whereas",
         "whether",
-    ]
-    for prep in prepositions:
-        sentences = re.sub(rf"{separator}({prep}\s)", r" \1", sentences)
+    ], key=len, reverse=True))
+    prep_pattern = re.compile(rf"{escaped_separator}({prep_regex_str})\s")
+    sentences = prep_pattern.sub(lambda m: " " + m.group(1) + " ", sentences)
 
-    # No sentence breaks in the middle of specific abbreviations
-    sentences = re.sub(rf"(\be\.){separator}(g\.)", r"\1 \2", sentences)
-    sentences = re.sub(rf"(\bi\.){separator}(e\.)", r"\1 \2", sentences)
-    sentences = re.sub(rf"(\bi\.){separator}(v\.)", r"\1 \2", sentences)
+    # Compile patterns used multiple times in a row for abbreviations
+    sentences = re.sub(rf"(\be\.){escaped_separator}(g\.)", r"\1 \2", sentences)
+    sentences = re.sub(rf"(\bi\.){escaped_separator}(e\.)", r"\1 \2", sentences)
+    sentences = re.sub(rf"(\bi\.){escaped_separator}(v\.)", r"\1 \2", sentences)
 
-    # No sentence break after specific abbreviations
+    # Precompile all abbreviation patterns with ignorecase for final step
     abbreviations = [
         r"e\. ?g\.",
         r"i\. ?e\.",
@@ -189,10 +169,10 @@ def postproc_splits(sentences, separator):
         r"vs\.",
         r"i\. ?e\.",
     ]
-    for abbr in abbreviations:
-        sentences = re.sub(
-            rf"(\b{abbr}){separator}", r"\1", sentences, flags=re.IGNORECASE
-        )
+    # Use a single regex for all abbreviations to reduce number of calls
+    abbr_regex_str = "|".join(abbreviations)
+    abbr_pattern = re.compile(rf"(\b(?:{abbr_regex_str})){escaped_separator}", flags=re.IGNORECASE)
+    sentences = abbr_pattern.sub(r"\1", sentences)
 
     return sentences
 
