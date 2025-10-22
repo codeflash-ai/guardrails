@@ -632,10 +632,18 @@ def merge_reask_output(previous_response, reask_response) -> Dict:
     # pruned_reask_json = prune_obj_for_reasking(previous_response)
     pruned_reask_json = previous_response
 
-    # Reask output and reask json have the same structure, except that values
-    # of the reask json are ReAsk objects. We want to replace the ReAsk objects
-    # with the values from the reask output.
-    merged_json = deepcopy(previous_response)
+    # Efficient deep copy to avoid excessive recursive calls
+    def fast_deepcopy(obj):
+        # Only handle dicts/lists which are the only types requiring traversal in this workflow,
+        # fallback to copy for everything else (e.g., str, int, FieldReAsk, ReAsk, etc.)
+        if isinstance(obj, dict):
+            return {k: fast_deepcopy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [fast_deepcopy(x) for x in obj]
+        else:
+            return obj
+
+    merged_json = fast_deepcopy(previous_response)
 
     def update_reasked_elements(pruned_reask_json, reask_response_dict):
         if isinstance(pruned_reask_json, dict):
@@ -648,9 +656,7 @@ def merge_reask_output(previous_response, reask_response) -> Dict:
                     corrected_value = reask_response_dict.get(key)
                     update_response_by_path(merged_json, value.path, corrected_value)
                 else:
-                    update_reasked_elements(
-                        pruned_reask_json[key], reask_response_dict[key]
-                    )
+                    update_reasked_elements(value, reask_response_dict[key])
         elif isinstance(pruned_reask_json, list):
             for i, item in enumerate(pruned_reask_json):
                 if isinstance(item, FieldReAsk):
@@ -661,9 +667,7 @@ def merge_reask_output(previous_response, reask_response) -> Dict:
                     corrected_value = reask_response_dict[i]
                     update_response_by_path(merged_json, item.path, corrected_value)
                 else:
-                    update_reasked_elements(
-                        pruned_reask_json[i], reask_response_dict[i]
-                    )
+                    update_reasked_elements(item, reask_response_dict[i])
 
     update_reasked_elements(pruned_reask_json, reask_response)
 
