@@ -1,7 +1,7 @@
 import json
 from typing import Any, Callable, Dict, Optional, Union, List
 from opentelemetry.baggage import get_baggage
-from opentelemetry import context
+from opentelemetry import context as otel_context_module, context
 from opentelemetry.context import Context
 from opentelemetry.trace import Tracer, Span
 
@@ -11,6 +11,8 @@ from guardrails.stores.context import (
     get_tracer_context,
 )
 
+_trace_module = None
+
 
 def get_tracer(tracer: Optional[Tracer] = None) -> Optional[Tracer]:
     # TODO: Do we ever need to consider supporting non-otel tracers?
@@ -19,20 +21,29 @@ def get_tracer(tracer: Optional[Tracer] = None) -> Optional[Tracer]:
 
 
 def get_current_context() -> Union[Context, None]:
-    otel_current_context = (
-        context.get_current()
-        if context is not None and hasattr(context, "get_current")
-        else None
-    )
-    tracer_context = get_tracer_context()
-    return otel_current_context or tracer_context
+    # Fast path: avoid double lookup and hasattr every call
+    otel_get_current = getattr(otel_context_module, "get_current", None)
+    otel_current_context = otel_get_current() if otel_get_current is not None else None
+    # get_tracer_context is relatively expensive per profiling: Only call if fallback necessary
+    if otel_current_context is not None:
+        return otel_current_context
+    return get_tracer_context()
 
 
 def get_span(span: Optional[Span] = None) -> Optional[Span]:
+    # Retain fast-path cheap attribute test, avoids unnecessary work
     if span is not None and hasattr(span, "add_event"):
         return span
+
+    global _trace_module
     try:
-        from opentelemetry import trace
+        # Cache the imported trace module to avoid repeated import costs
+        if _trace_module is None:
+            # Only import when needed and at most once
+            from opentelemetry import trace as _mod
+
+            _trace_module = _mod
+        trace = _trace_module
 
         current_context = get_current_context()
         current_span = trace.get_current_span(current_context)
