@@ -546,17 +546,19 @@ def gather_reasks(
     ) -> None:
         if path is None:
             path = []
+        # Avoid concurrent modification: collect keys to remove
+        keys_to_remove = []
         for field, value in original.items():
             if isinstance(value, FieldReAsk):
                 value.path = path + [field]
                 reasks.append(value)
-                del valid_output[field]
-
-            if isinstance(value, dict):
+                keys_to_remove.append(field)
+            elif isinstance(value, dict):
                 _gather_reasks_in_dict(value, valid_output[field], path + [field])
-
-            if isinstance(value, list):
+            elif isinstance(value, list):
                 _gather_reasks_in_list(value, valid_output[field], path + [field])
+        for key in keys_to_remove:
+            del valid_output[key]
         return
 
     def _gather_reasks_in_list(
@@ -564,23 +566,29 @@ def gather_reasks(
     ) -> None:
         if path is None:
             path = []
+        # Avoid concurrent modification: collect indices to remove
+        indices_to_remove = []
         for idx, item in enumerate(original):
             if isinstance(item, FieldReAsk):
                 item.path = path + [idx]
                 reasks.append(item)
-                del valid_output[idx]
+                indices_to_remove.append(idx)
             elif isinstance(item, dict):
                 _gather_reasks_in_dict(item, valid_output[idx], path + [idx])
             elif isinstance(item, list):
                 _gather_reasks_in_list(item, valid_output[idx], path + [idx])
+        # Remove FieldReAsk items starting from the end for O(1) deletion
+        for idx in reversed(indices_to_remove):
+            del valid_output[idx]
         return
 
+    # Use shallow copy instead of deepcopy for efficiency
     if isinstance(validated_output, Dict):
-        valid_output = deepcopy(validated_output)
+        valid_output = validated_output.copy()
         _gather_reasks_in_dict(validated_output, valid_output)
         return reasks, valid_output
     elif isinstance(validated_output, List):
-        valid_output = deepcopy(validated_output)
+        valid_output = validated_output[:]
         _gather_reasks_in_list(validated_output, valid_output)
         return reasks, valid_output
     return reasks, None
