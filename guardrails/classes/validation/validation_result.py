@@ -37,6 +37,8 @@ class ValidationResult(IValidationResult, ArbitraryModel):
                 validated_chunk=i_validation_result.validated_chunk,
             )
         elif i_validation_result.outcome == "fail":
+            if isinstance(i_validation_result, IFailResult):
+                return FailResult.from_interface(i_validation_result)
             return FailResult.from_dict(i_validation_result.to_dict())
 
         return cls(
