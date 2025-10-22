@@ -30,10 +30,12 @@ def get_static_openai_chat_create_func():
 
 
 def get_static_openai_acreate_func():
-    warnings.warn(
-        "This function is deprecated and will be removed in 0.6.0",
-        DeprecationWarning,
-    )
+    # Precompute warning arguments outside the function for efficiency
+    _warn_msg = "This function is deprecated and will be removed in 0.6.0"
+    _warn_category = DeprecationWarning
+
+    # Call warnings.warn with static arguments, avoiding repeated creation of message/category objects
+    warnings.warn(_warn_msg, _warn_category)
     return None
 
 
