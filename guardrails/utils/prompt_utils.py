@@ -55,13 +55,14 @@ def prompt_content_for_schema(
 def messages_to_prompt_string(
     messages: Union[list[dict[str, Union[str, Prompt, Instructions]]], MessageHistory],
 ) -> str:
-    messages_copy = ""
+    # Use list to collect strings and join at the end for efficient concatenation
+    contents = []
+    append = contents.append  # Local var to avoid attribute lookup in loop
+    prompt_types = (Prompt, Instructions)
     for msg in messages:
-        content = (
-            msg["content"].source  # type: ignore
-            if isinstance(msg["content"], Prompt)
-            or isinstance(msg["content"], Instructions)  # type: ignore
-            else msg["content"]  # type: ignore
-        )
-        messages_copy += content
-    return messages_copy
+        value = msg["content"]  # type: ignore
+        if isinstance(value, prompt_types):  # type: ignore
+            append(value.source)  # type: ignore
+        else:
+            append(value)  # type: ignore
+    return "".join(contents)
