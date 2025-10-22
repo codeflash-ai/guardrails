@@ -110,8 +110,10 @@ class Validator:
         if not self._disable_telemetry:
             self._hub_telemetry = HubTelemetry(enabled=settings.rc.enable_metrics)
 
-        self.use_local = kwargs.get("use_local", None)
-        self.validation_endpoint = kwargs.get("validation_endpoint", None)
+        # Get potential keyword arguments up front for efficiency
+        use_local = kwargs.get("use_local", None)
+        validation_endpoint = kwargs.get("validation_endpoint", None)
+
         # NOTE: I think this is an evergreen check
         # We should test w/o an rc file,
         #   and if this doesn't raise then we should remove this.
@@ -121,6 +123,9 @@ class Validator:
                 " Please run `guardrails configure` and try again."
             )
         self.hub_jwt_token = get_jwt_token(settings.rc)
+
+        self.use_local = use_local
+        self.validation_endpoint = validation_endpoint
 
         # If use_local is not set, we can fall back to the setting determined in CLI
         if self.use_local is None:
@@ -423,17 +428,20 @@ class Validator:
         Returns:
             A string representation of the validator.
         """
-        if not len(self._kwargs):
+        if not self._kwargs:
             return self.rail_alias
 
-        kwargs = self._kwargs.copy()
-        for k, v in kwargs.items():
-            if not isinstance(v, str):
-                kwargs[k] = str(v)
-
-        params = " ".join(list(kwargs.values()))
         if with_keywords:
-            params = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+            params = " ".join(
+                [
+                    f"{k}={v}" if isinstance(v, str) else f"{k}={v!s}"
+                    for k, v in self._kwargs.items()
+                ]
+            )
+        else:
+            params = " ".join(
+                [v if isinstance(v, str) else f"{v!s}" for v in self._kwargs.values()]
+            )
         return f"{self.rail_alias}: {params}"
 
     # TODO: Is this still used anywhere?
