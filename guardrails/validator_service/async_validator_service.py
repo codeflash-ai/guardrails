@@ -218,43 +218,65 @@ class AsyncValidatorService(ValidatorServiceBase):
         stream: Optional[bool] = False,
         **kwargs,
     ):
-        async def validate_child(
-            child_value: Any, *, key: Optional[str] = None, index: Optional[int] = None
-        ):
-            child_key = key or index
-            abs_child_path = f"{abs_parent_path}.{child_key}"
-            ref_child_path = ref_parent_path
-            if key is not None:
-                ref_child_path = f"{ref_child_path}.{key}"
-            elif index is not None:
-                ref_child_path = f"{ref_child_path}.*"
-            new_child_value, new_metadata = await self.async_validate(
-                child_value,
-                metadata,
-                validator_map,
-                iteration,
-                abs_child_path,
-                ref_child_path,
-                stream=stream,
-                **kwargs,
-            )
-            return child_key, new_child_value, new_metadata
+        # Localize frequently accessed method for slight speedup
+        async_validate = self.async_validate
 
+        # Avoid inner function closure allocation by using tuples directly
         coroutines = []
-        if isinstance(value, List):
-            for index, child in enumerate(value):
-                coroutines.append(validate_child(child, index=index))
-        elif isinstance(value, Dict):
-            for key in value:
-                child = value.get(key)
-                coroutines.append(validate_child(child, key=key))
 
+        if isinstance(value, List):
+            # Precompute abs_child_path and ref_child_path and avoid lambda/closure
+            for index, child in enumerate(value):
+                child_key = index
+                abs_child_path = f"{abs_parent_path}.{child_key}"
+                ref_child_path = f"{ref_parent_path}.*"
+                coroutines.append(
+                    async_validate(
+                        child,
+                        metadata,
+                        validator_map,
+                        iteration,
+                        abs_child_path,
+                        ref_child_path,
+                        stream=stream,
+                        **kwargs,
+                    )
+                )
+        elif isinstance(value, Dict):
+            for key, child in value.items():  # Use .items() for speed
+                child_key = key
+                abs_child_path = f"{abs_parent_path}.{child_key}"
+                ref_child_path = f"{ref_parent_path}.{key}"
+                coroutines.append(
+                    async_validate(
+                        child,
+                        metadata,
+                        validator_map,
+                        iteration,
+                        abs_child_path,
+                        ref_child_path,
+                        stream=stream,
+                        **kwargs,
+                    )
+                )
+
+        # Run all validation at once
         results = await asyncio.gather(*coroutines)
 
-        for key, child_value, child_metadata in results:
-            value[key] = child_value
-            # TODO address conflicting metadata entries
-            metadata = {**metadata, **child_metadata}
+        # Avoid redundant assignments/merges by using fast local updates
+        # Assign updated children by index or key
+        if isinstance(value, List):
+            # enumerate to ensure correct assignment
+            for i, (child_value, child_metadata) in enumerate(results):
+                value[i] = child_value
+                # TODO address conflicting metadata entries
+                metadata = {**metadata, **child_metadata}
+        elif isinstance(value, Dict):
+            keys = value.keys()  # avoid repetitive calls
+            for key, (child_value, child_metadata) in zip(keys, results):
+                value[key] = child_value
+                # TODO address conflicting metadata entries
+                metadata = {**metadata, **child_metadata}
 
         return value, metadata
 
