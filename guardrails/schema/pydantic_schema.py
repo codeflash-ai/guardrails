@@ -122,13 +122,19 @@ def get_base_model(
 def try_get_base_model(
     pydantic_class: ModelOrListOrDict,
 ) -> Tuple[Optional[Type[BaseModel]], Optional[Any], Optional[Any]]:
+    cache = try_get_base_model.__dict__.setdefault("_cache", {})
     try:
-        model, type_origin, key_type_origin = get_base_model(pydantic_class)
-        return (model, type_origin, key_type_origin)
-    except ValueError:
-        return (None, None, None)
-    except TypeError:
-        return (None, None, None)
+        return cache[pydantic_class]
+    except KeyError:
+        try:
+            model, type_origin, key_type_origin = get_base_model(pydantic_class)
+            result = (model, type_origin, key_type_origin)
+        except ValueError:
+            result = (None, None, None)
+        except TypeError:
+            result = (None, None, None)
+        cache[pydantic_class] = result
+        return result
 
 
 def extract_union_member(
