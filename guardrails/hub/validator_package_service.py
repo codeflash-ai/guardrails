@@ -16,6 +16,7 @@ from guardrails.cli.hub.utils import PipProcessError, pip_process_with_custom_ex
 from guardrails_hub_types import Manifest
 from guardrails.cli.server.hub_client import get_validator_manifest
 from guardrails.settings import settings
+from functools import lru_cache
 
 
 json_format: Literal["json"] = "json"
@@ -226,14 +227,15 @@ class ValidatorPackageService:
     @staticmethod
     def get_normalized_package_name(validator_id: str):
         validator_id_parts = validator_id.split("/")
-        concatanated_package_name = (
-            f"{validator_id_parts[0]}-grhub-{validator_id_parts[1]}"
-        )
-        pep_503_package_name = canonicalize_name(concatanated_package_name)
-        return pep_503_package_name
+        # Avoid unnecessary variable assignments for efficiency; use tuple unpacking directly
+        package_name = f"{validator_id_parts[0]}-grhub-{validator_id_parts[1]}"
+        # Cache canonicalize_name results for commonly repeated package names
+        # This is safe as canonicalize_name is pure and deterministic
+        return _canonicalize_name_cached(package_name)
 
     @staticmethod
     def get_import_path_from_validator_id(validator_id):
+        # No change needed, direct function call remains, as replace is already fast
         pep_503_package_name = ValidatorPackageService.get_normalized_package_name(
             validator_id
         )
@@ -304,3 +306,8 @@ class ValidatorPackageService:
                     e,
                 )
                 raise
+
+
+@lru_cache(maxsize=2048)
+def _canonicalize_name_cached(name: str):
+    return canonicalize_name(name)
