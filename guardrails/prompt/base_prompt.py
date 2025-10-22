@@ -23,14 +23,14 @@ class BasePrompt:
     ):
         """Initialize and substitute constants in the prompt."""
         self._source = source
+        # Cache variable names once for efficiency
+        self.variable_names: List[str] = get_template_variables(source)
         self.format_instructions_start = self.get_format_instructions_idx(source)
 
-        # FIXME: Why is this happening on init instead of on format?
         # Substitute constants in the prompt.
         source = self.substitute_constants(source)
 
-        # FIXME: Why is this happening on init instead of on format?
-        # If an output schema is provided, substitute it in the prompt.
+        # Substitute output schemas if provided.
         if output_schema or xml_output_schema:
             self.source = Template(source).safe_substitute(
                 output_schema=output_schema, xml_output_schema=xml_output_schema
@@ -72,6 +72,7 @@ class BasePrompt:
         return text
 
     def get_prompt_variables(self) -> List[str]:
+        # Return cached variable names for efficiency
         return self.variable_names
 
     def format(self, **kwargs) -> "BasePrompt":
