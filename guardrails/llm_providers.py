@@ -75,13 +75,16 @@ def litellm_messages(
     """Prepare messages for LiteLLM."""
     if messages:
         return messages
+
     if prompt is None:
         raise PromptCallableException(
             "Either `text` or `messages` required for `guard.__call__`."
         )
 
+    # Slightly more efficient concatenation using f-string when instructions is provided
     if instructions:
-        prompt = "\n\n".join([instructions, prompt])
+        # Avoid creating a list and using join; use string concatenation which is faster for just two strings
+        prompt = f"{instructions}\n\n{prompt}"
 
     return [{"role": "user", "content": prompt}]
 
