@@ -2,7 +2,7 @@
 """This module contains the constants and utils used by the validator.py."""
 
 from ast import literal_eval
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
+from typing import Any, List, Optional, Tuple, Type, Union, cast
 
 from guardrails_api_client import ValidatorReference
 
@@ -82,10 +82,11 @@ def parse_use_many_validator(
 ) -> Optional[Validator]:
     args = safe_get(use_tuple, 1, [])
     kwargs = {}
-    if isinstance(args, Dict):
+    args_type = type(args)
+    if args_type is dict:
         kwargs = args
         args = []
-    elif not isinstance(args, List):
+    elif args_type is not list:
         args = [args]
     kwargs = safe_get(use_tuple, 2, kwargs)
     if validator_cls:
