@@ -860,13 +860,16 @@ class AsyncArbitraryCallable(AsyncPromptCallableBase):
 def get_async_llm_ask(
     llm_api: Callable[..., Awaitable[Any]], *args, **kwargs
 ) -> AsyncPromptCallableBase:
-    try:
-        import litellm
+    if llm_api is not None or kwargs.get("model"):
+        try:
+            import litellm
 
-        if llm_api == litellm.acompletion or (llm_api is None and kwargs.get("model")):
-            return AsyncLiteLLMCallable(*args, **kwargs)
-    except ImportError:
-        pass
+            if llm_api == litellm.acompletion or (
+                llm_api is None and kwargs.get("model")
+            ):
+                return AsyncLiteLLMCallable(*args, **kwargs)
+        except ImportError:
+            pass
 
     try:
         import manifest  # noqa: F401 # type: ignore
