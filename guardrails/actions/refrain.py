@@ -28,16 +28,16 @@ def apply_refrain(value: Any, output_type: OutputTypes) -> Any:
 
     If found, return an empty value of the appropriate type.
     """
-    refrain_value = {}
-    if output_type == OutputTypes.STRING:
-        refrain_value = ""
-    elif output_type == OutputTypes.LIST:
-        refrain_value = []
-
     if check_for_refrain(value):
         # If the data contains a `Refain` value, we return an empty
         # value.
+        if output_type == OutputTypes.STRING:
+            refrain_value = ""
+        elif output_type == OutputTypes.LIST:
+            refrain_value = []
+        else:
+            refrain_value = {}
         logger.debug("Refrain detected.")
-        value = refrain_value
+        return refrain_value
 
     return value
