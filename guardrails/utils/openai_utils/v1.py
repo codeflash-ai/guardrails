@@ -272,7 +272,9 @@ class AsyncOpenAIClientV1(BaseOpenAIClient):
             model=model,
             input=input,
         )
-        return [r.embedding for r in embeddings.data]
+        # Use a list comprehension with a local variable lookup to improve speed
+        data = embeddings.data
+        return [r.embedding for r in data]
 
     async def create_completion(
         self, engine: str, prompt: str, *args, **kwargs
