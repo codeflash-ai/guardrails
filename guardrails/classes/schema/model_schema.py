@@ -6,6 +6,8 @@ from guardrails_api_client import ModelSchema as IModelSchema, ValidationType
 class ModelSchema(IModelSchema):
     def to_dict(self) -> Dict[str, Any]:
         super_dict = super().to_dict()
+        if not super_dict:
+            return super_dict
         return {k: v for k, v in super_dict.items() if v is not None}
 
     @classmethod
